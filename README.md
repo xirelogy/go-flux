@@ -11,7 +11,7 @@ go-flux is a small, embeddable scripting language for Go. It compiles to bytecod
 ## Documentation
 - Language spec: [docs/LANGUAGE.md](docs/LANGUAGE.md)
 - Bytecode draft: [docs/BYTECODE.md](docs/BYTECODE.md)
-- License: LGPL-3.0 (see [LICENSE](LICENSE))
+- License: LGPL-3.0 (see [LICENSE](LICENSE.md))
 
 ## Quick start
 ```go
