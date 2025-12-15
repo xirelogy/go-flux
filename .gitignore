@@ -1,0 +1,17 @@
+# Build outputs
+netsense-agent
+*.test
+*.out
+
+# Cache and temp files
+*.log
+*.tmp
+*.swp
+
+# IDE and tooling metadata
+.idea/
+.vscode/
+
+# Caches
+.cache
+.gocache
