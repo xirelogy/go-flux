@@ -506,6 +506,57 @@ func TestAPIBuiltinsAutoRegistered(t *testing.T) {
 	}
 }
 
+func TestAPIFunctionMapMarshal(t *testing.T) {
+	vm := NewVM()
+	script := `
+func call($ns) {
+  $a := $ns.add(2, 3)
+  $b := $ns.greet("hi")
+  $r := readonly($ns)
+  return [$a, $b, $r]
+}
+func boom($ns) { return $ns.fail() }`
+	if err := vm.LoadSource("rpc", script); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+
+	funcs := map[string]any{
+		"add": func(a int, b int) int { return a + b },
+		"greet": func(s string) (string, error) {
+			return s + "!", nil
+		},
+		"fail": func() error {
+			return fmt.Errorf("nope")
+		},
+	}
+	ns := MustMarshalFunctionMap(funcs)
+	if !ns.IsReadOnly() {
+		t.Fatalf("expected namespace to be read-only")
+	}
+
+	callRes, err := vm.CallAsync(context.Background(), "call", []VmValue{ns}).Await(context.Background())
+	if err != nil {
+		t.Fatalf("call error: %v", err)
+	}
+	arr, ok := callRes.Array()
+	if !ok || len(arr) != 3 {
+		t.Fatalf("unexpected call result %#v", callRes)
+	}
+	if n, _ := arr[0].Number(); n != 5 {
+		t.Fatalf("expected add to return 5, got %#v", arr[0])
+	}
+	if s, _ := arr[1].String(); s != "hi!" {
+		t.Fatalf("expected greet result hi!, got %#v", arr[1])
+	}
+	if arr[2].Kind() != ValueBool || arr[2].MustRaw().(bool) != true {
+		t.Fatalf("expected readonly($ns) to return true, got %#v", arr[2])
+	}
+
+	if _, err := vm.CallAsync(context.Background(), "boom", []VmValue{ns}).Await(context.Background()); err == nil || !strings.Contains(err.Error(), "nope") {
+		t.Fatalf("expected boom to propagate error nope, got %v", err)
+	}
+}
+
 func TestAPIScriptErrorPromotion(t *testing.T) {
 	script := `func boom() { return error("boom") }`
 

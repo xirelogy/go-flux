@@ -248,5 +248,20 @@ for {
 - `VmValue` helpers: `Kind`, `IsNull`, `Bool/Number/String/ErrorString`, `Array`, `Object`, `Raw()`/`MustRaw()` for primitives, and `AsFunction`/`AsIterator` for handles.
 - Host can mark marshaled arrays/objects as read-only with `flux.NewValueWithOptions(val, flux.MarshalOptions{ReadOnly: true})` (or `MustValueWithOptions`). Scripts can query with `readonly($x)`; attempts to mutate throw a runtime error.
 
+### Marshaling function maps (RPC-style namespaces)
+```go
+ns := flux.MustMarshalFunctionMap(map[string]any{
+  "add":  func(a int, b int) int { return a + b },
+  "ping": func(s string) (string, error) { return s + "!", nil },
+  "fail": func() error { return fmt.Errorf("boom") },
+})
+vm.LoadSource("rpc", `func use($ns) { return [$ns.add(1,2), $ns.ping("ok")] }`)
+out, _ := vm.CallAsync(context.Background(), "use", []flux.VmValue{ns}).Await(context.Background())
+fmt.Println(out.MustRaw()) // [3 "ok!"]
+```
+- Functions must be real Go funcs (non-nil), with up to two return values (if two, the second must be `error`; if one, it can be a value or `error`).
+- Arguments and return values are marshaled/unmarshaled automatically using the same rules as `NewValue`/`Unmarshal`.
+- The produced namespace object is read-only in the VM.
+
 ## Notes
 - The API surface may evolve as diagnostics, limits, and tooling mature.

@@ -17,6 +17,10 @@ import (
 	"github.com/xirelogy/go-flux/internal/vm"
 )
 
+var (
+	errorType = reflect.TypeOf((*error)(nil)).Elem()
+)
+
 // VmValue is a marshaled value that is compatible with go-flux types.
 // It wraps the internal vm.Value representation.
 type VmValue struct {
@@ -273,6 +277,39 @@ func MustValueReadOnly(val any) VmValue {
 	return MustValueWithOptions(val, MarshalOptions{ReadOnly: true})
 }
 
+// MarshalFunctionMap converts a map of Go functions into a read-only flux object of callable functions.
+// Supported signatures:
+//
+//	func(...) T
+//	func(...) (T, error)
+//	func(...) error
+//	func(...), which returns null
+//
+// Where T is any type supported by NewValue marshaling.
+func MarshalFunctionMap(funcs map[string]any) (VmValue, error) {
+	if funcs == nil {
+		return VmValue{}, errors.New("nil function map")
+	}
+	obj := make(map[string]vm.Value, len(funcs))
+	for name, fn := range funcs {
+		hostFn, err := vmFunctionFromFunc(name, fn)
+		if err != nil {
+			return VmValue{}, fmt.Errorf("marshal function %s: %w", name, err)
+		}
+		obj[name] = hostFn.toVMValueWithName(name)
+	}
+	return VmValue{v: vm.Value{Kind: vm.KindObject, Obj: obj, ReadOnly: true}}, nil
+}
+
+// MustMarshalFunctionMap panics on error; convenience for tests/bootstrap.
+func MustMarshalFunctionMap(funcs map[string]any) VmValue {
+	v, err := MarshalFunctionMap(funcs)
+	if err != nil {
+		panic(err)
+	}
+	return v
+}
+
 // Raw returns a Go representation of the value.
 // Functions and iterators are not convertible and will return an error.
 func (v VmValue) Raw() (any, error) {
@@ -506,6 +543,74 @@ func (fn *VmFunction) toVMValue() vm.Value {
 	return fn.toVMValueWithName("")
 }
 
+func vmFunctionFromFunc(name string, fn any) (*VmFunction, error) {
+	if fn == nil {
+		return nil, errors.New("nil function")
+	}
+	rv := reflect.ValueOf(fn)
+	rt := rv.Type()
+	if rt.Kind() != reflect.Func {
+		return nil, fmt.Errorf("value of %s is not a function", name)
+	}
+	if rt.NumOut() > 2 {
+		return nil, fmt.Errorf("function %s has too many return values (max 2)", name)
+	}
+	retValIndex := -1
+	retErrIndex := -1
+	switch rt.NumOut() {
+	case 0:
+	case 1:
+		if rt.Out(0) == errorType {
+			retErrIndex = 0
+		} else {
+			retValIndex = 0
+		}
+	case 2:
+		if rt.Out(1) != errorType {
+			return nil, fmt.Errorf("function %s second return value must be error", name)
+		}
+		retValIndex = 0
+		retErrIndex = 1
+	}
+
+	paramNames := make([]string, rt.NumIn())
+	for i := 0; i < len(paramNames); i++ {
+		paramNames[i] = fmt.Sprintf("arg%d", i)
+	}
+
+	handler := func(_ *Context, args map[string]VmValue) (VmValue, error) {
+		inputs := make([]reflect.Value, rt.NumIn())
+		for i := 0; i < rt.NumIn(); i++ {
+			arg, ok := args[paramNames[i]]
+			if !ok {
+				return VmValue{}, ArgError{Name: paramNames[i], Want: "present"}
+			}
+			val, err := convertVmValue(arg.v, rt.In(i))
+			if err != nil {
+				return VmValue{}, fmt.Errorf("argument %s: %w", paramNames[i], err)
+			}
+			inputs[i] = val
+		}
+		results := rv.Call(inputs)
+		if retErrIndex >= 0 && !results[retErrIndex].IsNil() {
+			return VmValue{}, results[retErrIndex].Interface().(error)
+		}
+		if retValIndex >= 0 {
+			mv, err := marshalGoValueWithOpts(results[retValIndex].Interface(), marshalOptions{})
+			if err != nil {
+				return VmValue{}, err
+			}
+			return VmValue{v: mv}, nil
+		}
+		return VmValue{v: vm.Null()}, nil
+	}
+
+	return &VmFunction{
+		Params:  paramNames,
+		Handler: handler,
+	}, nil
+}
+
 // VM is the configurator/executor for go-flux scripts.
 // It accumulates host bindings and script sources before execution.
 type VM struct {
@@ -669,6 +774,14 @@ func (vmc *VM) CallAsync(ctx context.Context, name string, args []VmValue) VmCal
 		ch <- VmCallResult{Value: outVal}
 	}()
 	return VmCallFuture{ch: ch}
+}
+
+func convertVmValue(src vm.Value, targetType reflect.Type) (reflect.Value, error) {
+	ptr := reflect.New(targetType)
+	if err := assignValue(src, ptr.Elem()); err != nil {
+		return reflect.Value{}, err
+	}
+	return ptr.Elem(), nil
 }
 
 type marshalOptions struct {
