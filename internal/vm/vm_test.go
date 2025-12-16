@@ -241,6 +241,15 @@ func TestVMBuiltinsIndividual(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "readonly false by default",
+			src:  `func demo() { return readonly({}) }`,
+			validate: func(t *testing.T, v vm.Value) {
+				if v.Kind != vm.KindBool || v.B {
+					t.Fatalf("readonly default mismatch: %#v", v)
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -248,6 +257,34 @@ func TestVMBuiltinsIndividual(t *testing.T) {
 			v := runFunction(t, tt.src, "demo", nil)
 			tt.validate(t, v)
 		})
+	}
+}
+
+func TestVMReadonlyBuiltinTrue(t *testing.T) {
+	src := `func demo($o) { return readonly($o) }`
+	obj := vm.Object(map[string]vm.Value{"a": vm.Number(1)})
+	obj.ReadOnly = true
+	v := runFunction(t, src, "demo", []vm.Value{obj})
+	if v.Kind != vm.KindBool || !v.B {
+		t.Fatalf("readonly expected true, got %#v", v)
+	}
+}
+
+func TestVMReadonlyPreventsMutation(t *testing.T) {
+	src := `
+func mutate($o, $a) {
+  $o.a = 2
+  $a[0] = 9
+}`
+	obj := vm.Object(map[string]vm.Value{"a": vm.Number(1)})
+	obj.ReadOnly = true
+	arr := vm.Array([]vm.Value{vm.Number(1)})
+	arr.ReadOnly = true
+	mod := compileModule(t, src)
+	machine := vm.New()
+	machine.LoadModule(mod)
+	if _, err := machine.Call("mutate", []vm.Value{obj, arr}); err == nil {
+		t.Fatalf("expected mutation to fail on read-only values")
 	}
 }
 

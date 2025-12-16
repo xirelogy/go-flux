@@ -246,6 +246,7 @@ for {
 - Functions: `*flux.VmFunction` marshals to a callable flux function; script-side functions cannot be flattened with `Raw()` (it errors) but can be inspected via `AsFunction` (handle, callable on the owning VM). No round-trip of closures to Go-native funcs.
 - Iterators likewise cannot be flattened with `Raw()`; use `AsIterator` for handle-style access.
 - `VmValue` helpers: `Kind`, `IsNull`, `Bool/Number/String/ErrorString`, `Array`, `Object`, `Raw()`/`MustRaw()` for primitives, and `AsFunction`/`AsIterator` for handles.
+- Host can mark marshaled arrays/objects as read-only with `flux.NewValueWithOptions(val, flux.MarshalOptions{ReadOnly: true})` (or `MustValueWithOptions`). Scripts can query with `readonly($x)`; attempts to mutate throw a runtime error.
 
 ## Notes
 - The API surface may evolve as diagnostics, limits, and tooling mature.

@@ -26,6 +26,8 @@ type Value struct {
 	Err  string
 	It   *Iterator
 	B    bool
+	// ReadOnly marks array/object containers as immutable from script code.
+	ReadOnly bool
 }
 
 func Null() Value { return Value{Kind: KindNull} }

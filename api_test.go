@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -435,6 +436,58 @@ func callHost($fn) {
 	}
 	if res.MustRaw().(float64) != 12 {
 		t.Fatalf("expected 12, got %#v", res)
+	}
+}
+
+func TestAPIReadonlyMarshaledValues(t *testing.T) {
+	vm := NewVM()
+	script := `
+func mutate($o, $a) {
+  $o.k = 2
+  $a[0] = 5
+  return [$o.k, $a[0]]
+}
+
+func check($x) {
+  return readonly($x)
+}`
+	if err := vm.LoadSource("readonly", script); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+
+	roObj := MustValueWithOptions(map[string]any{"k": 1.0}, MarshalOptions{ReadOnly: true})
+	roArr := MustValueWithOptions([]any{1.0}, MarshalOptions{ReadOnly: true})
+	if _, err := vm.CallAsync(context.Background(), "mutate", []VmValue{roObj, roArr}).Await(context.Background()); err == nil {
+		t.Fatalf("expected mutation of read-only values to fail")
+	} else if !strings.Contains(err.Error(), "read-only") {
+		t.Fatalf("expected read-only error, got %v", err)
+	}
+
+	// Builtin check: host-marked values report as read-only.
+	roCheck, err := vm.CallAsync(context.Background(), "check", []VmValue{roObj}).Await(context.Background())
+	if err != nil {
+		t.Fatalf("readonly check call error: %v", err)
+	}
+	if val, ok := roCheck.Bool(); !ok || !val {
+		t.Fatalf("expected readonly(...) to report true, got %#v", roCheck)
+	}
+
+	// Mutable values remain writable.
+	obj := MustValue(map[string]any{"k": 1.0})
+	arr := MustValue([]any{1.0})
+	res, err := vm.CallAsync(context.Background(), "mutate", []VmValue{obj, arr}).Await(context.Background())
+	if err != nil {
+		t.Fatalf("mutation on mutable values failed: %v", err)
+	}
+	out, ok := res.Array()
+	if !ok || len(out) != 2 {
+		t.Fatalf("unexpected mutate return: %#v", res)
+	}
+	if v, _ := out[0].Number(); v != 2 {
+		t.Fatalf("expected object field update to 2, got %#v", out[0])
+	}
+	if v, _ := out[1].Number(); v != 5 {
+		t.Fatalf("expected array update to 5, got %#v", out[1])
 	}
 }
 

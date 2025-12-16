@@ -330,6 +330,9 @@ func (vm *VM) Run(fn *Function, args []Value) (Value, error) {
 			if obj.Kind != KindObject || obj.Obj == nil {
 				return vm.errorf(fr, "property set on non-object")
 			}
+			if obj.ReadOnly {
+				return vm.errorf(fr, "cannot modify read-only value")
+			}
 			obj.Obj[prop] = val
 		case bytecode.OP_JUMP:
 			off := vm.readU16(fr)
@@ -650,6 +653,9 @@ func indexGet(target Value, index Value) (Value, error) {
 func indexSet(target Value, index Value, val Value) error {
 	switch target.Kind {
 	case KindArray:
+		if target.ReadOnly {
+			return fmt.Errorf("cannot modify read-only value")
+		}
 		i, err := expectIndex(index, len(target.Arr))
 		if err != nil {
 			return err
@@ -657,6 +663,9 @@ func indexSet(target Value, index Value, val Value) error {
 		target.Arr[i] = val
 		return nil
 	case KindObject:
+		if target.ReadOnly {
+			return fmt.Errorf("cannot modify read-only value")
+		}
 		k, err := expectKeyString(index)
 		if err != nil {
 			return err

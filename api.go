@@ -52,6 +52,11 @@ type Unmarshaler interface {
 	UnmarshalFlux(VmValue) error
 }
 
+// MarshalOptions tunes Go→flux marshaling behavior.
+type MarshalOptions struct {
+	ReadOnly bool // mark array/object containers as read-only inside the VM
+}
+
 // ValueKind mirrors the flux runtime kinds for convenient inspection.
 type ValueKind int
 
@@ -237,7 +242,12 @@ func (a HostArgs) Object(name string) (map[string]VmValue, error) {
 
 // NewValue marshals a Go value into a go-flux-compatible VmValue.
 func NewValue(val any) (VmValue, error) {
-	v, err := marshalGoValue(val)
+	return NewValueWithOptions(val, MarshalOptions{})
+}
+
+// NewValueWithOptions marshals a Go value with extra controls such as read-only marking.
+func NewValueWithOptions(val any, opts MarshalOptions) (VmValue, error) {
+	v, err := marshalGoValueWithOpts(val, marshalOptions{readOnly: opts.ReadOnly})
 	if err != nil {
 		return VmValue{}, err
 	}
@@ -246,11 +256,21 @@ func NewValue(val any) (VmValue, error) {
 
 // MustValue marshals and panics on error (convenience for tests/examples).
 func MustValue(val any) VmValue {
-	v, err := NewValue(val)
+	return MustValueWithOptions(val, MarshalOptions{})
+}
+
+// MustValueWithOptions marshals with options or panics on error.
+func MustValueWithOptions(val any, opts MarshalOptions) VmValue {
+	v, err := NewValueWithOptions(val, opts)
 	if err != nil {
 		panic(err)
 	}
 	return v
+}
+
+// MustValueReadOnly marshals and marks containers as read-only, panicking on error.
+func MustValueReadOnly(val any) VmValue {
+	return MustValueWithOptions(val, MarshalOptions{ReadOnly: true})
 }
 
 // Raw returns a Go representation of the value.
@@ -291,6 +311,11 @@ func (v VmValue) raw() (any, error) {
 // Kind reports the underlying value kind.
 func (v VmValue) Kind() ValueKind {
 	return ValueKind(v.v.Kind)
+}
+
+// IsReadOnly reports whether the value is a read-only array/object.
+func (v VmValue) IsReadOnly() bool {
+	return v.v.ReadOnly
 }
 
 func kindName(k ValueKind) string {
@@ -646,18 +671,26 @@ func (vmc *VM) CallAsync(ctx context.Context, name string, args []VmValue) VmCal
 	return VmCallFuture{ch: ch}
 }
 
+type marshalOptions struct {
+	readOnly bool
+}
+
 // marshalGoValue converts common Go types into vm.Value.
 func marshalGoValue(val any) (vm.Value, error) {
+	return marshalGoValueWithOpts(val, marshalOptions{})
+}
+
+func marshalGoValueWithOpts(val any, opts marshalOptions) (vm.Value, error) {
 	if m, ok := val.(Marshaler); ok {
 		custom, err := m.MarshalFlux()
 		if err != nil {
 			return vm.Value{}, err
 		}
-		return custom.v, nil
+		return applyReadOnly(custom.v, opts), nil
 	}
 	switch v := val.(type) {
 	case VmValue:
-		return v.v, nil
+		return applyReadOnly(v.v, opts), nil
 	case nil:
 		return vm.Null(), nil
 	case bool:
@@ -681,31 +714,31 @@ func marshalGoValue(val any) (vm.Value, error) {
 	case []any:
 		out := make([]vm.Value, len(v))
 		for i, el := range v {
-			mv, err := marshalGoValue(el)
+			mv, err := marshalGoValueWithOpts(el, opts)
 			if err != nil {
 				return vm.Value{}, err
 			}
 			out[i] = mv
 		}
-		return vm.Array(out), nil
+		return applyReadOnly(vm.Array(out), opts), nil
 	case []VmValue:
 		out := make([]vm.Value, len(v))
 		for i, el := range v {
-			out[i] = el.v
+			out[i] = applyReadOnly(el.v, opts)
 		}
-		return vm.Array(out), nil
+		return applyReadOnly(vm.Array(out), opts), nil
 	case map[string]any:
 		out := make(map[string]vm.Value, len(v))
 		for k, el := range v {
-			mv, err := marshalGoValue(el)
+			mv, err := marshalGoValueWithOpts(el, opts)
 			if err != nil {
 				return vm.Value{}, err
 			}
 			out[k] = mv
 		}
-		return vm.Object(out), nil
+		return applyReadOnly(vm.Object(out), opts), nil
 	case *VmFunction:
-		return v.toVMValueWithName(""), nil
+		return applyReadOnly(v.toVMValueWithName(""), opts), nil
 	case int8:
 		return vm.Number(float64(v)), nil
 	case int16:
@@ -735,10 +768,10 @@ func marshalGoValue(val any) (vm.Value, error) {
 			if rv.IsNil() {
 				return vm.Null(), nil
 			}
-			return marshalGoValue(rv.Elem().Interface())
+			return marshalGoValueWithOpts(rv.Elem().Interface(), opts)
 		}
 		if rv.Kind() == reflect.Interface && !rv.IsNil() {
-			return marshalGoValue(rv.Elem().Interface())
+			return marshalGoValueWithOpts(rv.Elem().Interface(), opts)
 		}
 		switch rv.Kind() {
 		case reflect.Bool:
@@ -754,13 +787,13 @@ func marshalGoValue(val any) (vm.Value, error) {
 		case reflect.Slice, reflect.Array:
 			out := make([]vm.Value, rv.Len())
 			for i := 0; i < rv.Len(); i++ {
-				mv, err := marshalGoValue(rv.Index(i).Interface())
+				mv, err := marshalGoValueWithOpts(rv.Index(i).Interface(), opts)
 				if err != nil {
 					return vm.Value{}, err
 				}
 				out[i] = mv
 			}
-			return vm.Array(out), nil
+			return applyReadOnly(vm.Array(out), opts), nil
 		case reflect.Map:
 			out := make(map[string]vm.Value, rv.Len())
 			iter := rv.MapRange()
@@ -775,13 +808,13 @@ func marshalGoValue(val any) (vm.Value, error) {
 				default:
 					keyStr = fmt.Sprint(k)
 				}
-				mv, err := marshalGoValue(iter.Value().Interface())
+				mv, err := marshalGoValueWithOpts(iter.Value().Interface(), opts)
 				if err != nil {
 					return vm.Value{}, err
 				}
 				out[keyStr] = mv
 			}
-			return vm.Object(out), nil
+			return applyReadOnly(vm.Object(out), opts), nil
 		case reflect.Struct:
 			out := make(map[string]vm.Value, rv.NumField())
 			rt := rv.Type()
@@ -790,16 +823,35 @@ func marshalGoValue(val any) (vm.Value, error) {
 				if field.PkgPath != "" { // unexported
 					continue
 				}
-				mv, err := marshalGoValue(rv.Field(i).Interface())
+				mv, err := marshalGoValueWithOpts(rv.Field(i).Interface(), opts)
 				if err != nil {
 					return vm.Value{}, err
 				}
 				out[field.Name] = mv
 			}
-			return vm.Object(out), nil
+			return applyReadOnly(vm.Object(out), opts), nil
 		}
 		return vm.Value{}, fmt.Errorf("unsupported value type %T", val)
 	}
+}
+
+func applyReadOnly(v vm.Value, opts marshalOptions) vm.Value {
+	if !opts.readOnly {
+		return v
+	}
+	switch v.Kind {
+	case vm.KindArray:
+		v.ReadOnly = true
+		for i := range v.Arr {
+			v.Arr[i] = applyReadOnly(v.Arr[i], opts)
+		}
+	case vm.KindObject:
+		v.ReadOnly = true
+		for k, el := range v.Obj {
+			v.Obj[k] = applyReadOnly(el, opts)
+		}
+	}
+	return v
 }
 
 // unmarshalToGo converts a vm.Value into a Go value for RawStrict().
