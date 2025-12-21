@@ -74,6 +74,31 @@ func TestAPIHostFunctionBinding(t *testing.T) {
 	}
 }
 
+func TestAPIHasFunction(t *testing.T) {
+	vm := NewVM()
+	if vm.HasFunction("missing") {
+		t.Fatalf("expected missing to be false")
+	}
+	if err := vm.LoadSource("inline", `func add($a, $b) { return $a + $b }`); err != nil {
+		t.Fatalf("load source: %v", err)
+	}
+	if !vm.HasFunction("add") {
+		t.Fatalf("expected add to be true")
+	}
+	if vm.HasFunction("missing") {
+		t.Fatalf("expected missing to be false")
+	}
+	host := NewFunction(nil, func(ctx *Context, args map[string]VmValue) (VmValue, error) {
+		return MustValue(1), nil
+	})
+	if err := vm.SetGlobalFunction("host", host); err != nil {
+		t.Fatalf("set global: %v", err)
+	}
+	if !vm.HasFunction("host") {
+		t.Fatalf("expected host to be true")
+	}
+}
+
 func TestAPILanguageCoverage(t *testing.T) {
 	run := func(t *testing.T, src, entry string, args []any) (any, error) {
 		t.Helper()

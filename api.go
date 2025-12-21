@@ -639,6 +639,14 @@ func (vmc *VM) SetGlobalFunction(name string, fn *VmFunction) error {
 	return nil
 }
 
+// HasFunction reports whether a global function exists with the given name.
+func (vmc *VM) HasFunction(name string) bool {
+	if vmc == nil || vmc.core == nil {
+		return false
+	}
+	return vmc.core.HasFunction(name)
+}
+
 // LoadFile loads and compiles a script from a filesystem path.
 func (vmc *VM) LoadFile(path string) error {
 	data, err := os.ReadFile(path)

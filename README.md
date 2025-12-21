@@ -61,6 +61,10 @@ Reads, parses, compiles, and loads a script from disk. Returns I/O/parse/compile
 `func (vm *VM) LoadSource(name string, src string) error`  
 Loads source provided in-memory. `name` is used for diagnostics. Returns parse/compile errors.
 
+### (*VM) HasFunction
+`func (vm *VM) HasFunction(name string) bool`  
+Reports whether a global function exists with the given name. Returns false on nil VM.
+
 ### (*VM) CallAsync
 `func (vm *VM) CallAsync(ctx context.Context, name string, args []VmValue) VmCallFuture`  
 Resolves a global function by `name` and executes it with `args` on a fresh stack in a goroutine. Respects context cancellation before execution. Returns a future; results are obtained via `Await`.

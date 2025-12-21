@@ -101,6 +101,18 @@ func (vm *VM) DefineGlobal(name string, v Value) {
 	vm.globals[name] = v
 }
 
+// HasFunction reports whether a global function exists with the given name.
+func (vm *VM) HasFunction(name string) bool {
+	if vm == nil {
+		return false
+	}
+	val, ok := vm.globals[name]
+	if !ok {
+		return false
+	}
+	return val.Kind == KindFunction && val.Func != nil
+}
+
 // Call invokes a global function by name.
 func (vm *VM) Call(name string, args []Value) (Value, error) {
 	val, ok := vm.globals[name]
