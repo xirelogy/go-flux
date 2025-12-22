@@ -49,6 +49,10 @@ fmt.Println(res.MustRaw()) // 8
 `func NewVM() *VM`  
 Creates a new VM configurator/runner. Bind globals, load scripts, and issue calls through it. Not concurrency-safe; prefer one VM per goroutine or external locking.
 
+### (*VM) Duplicate
+`func (vm *VM) Duplicate() (*VM, error)`  
+Creates a new VM with the same configuration and global state, but independent memory. Returns an error if the VM is nil or busy.
+
 ### (*VM) SetGlobalFunction
 `func (vm *VM) SetGlobalFunction(name string, fn *VmFunction) error`  
 Binds a marshaled host function to a global name (same as declaring `func name(...)` in flux). Errors on nil receiver/function.

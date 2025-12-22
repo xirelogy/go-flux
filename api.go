@@ -627,6 +627,35 @@ func NewVM() *VM {
 	}
 }
 
+// Duplicate clones the VM configuration and global state into a new instance.
+// The duplicate has independent memory and no in-flight execution state.
+func (vmc *VM) Duplicate() (*VM, error) {
+	if vmc == nil || vmc.core == nil {
+		return nil, errors.New("nil VM")
+	}
+	vmc.mu.Lock()
+	if vmc.busy {
+		vmc.mu.Unlock()
+		return nil, errors.New("VM is busy; cannot duplicate while running")
+	}
+	vmc.busy = true
+	vmc.mu.Unlock()
+	defer func() {
+		vmc.mu.Lock()
+		vmc.busy = false
+		vmc.mu.Unlock()
+	}()
+
+	core := vmc.core.Duplicate()
+	if core == nil {
+		return nil, errors.New("VM duplicate failed")
+	}
+	return &VM{
+		core:            core,
+		propagateErrors: vmc.propagateErrors,
+	}, nil
+}
+
 // SetGlobalFunction binds a marshaled function to a global name (equivalent to a function declaration).
 func (vmc *VM) SetGlobalFunction(name string, fn *VmFunction) error {
 	if vmc == nil || vmc.core == nil {

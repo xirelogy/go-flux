@@ -99,6 +99,51 @@ func TestAPIHasFunction(t *testing.T) {
 	}
 }
 
+func TestAPIVMDuplicateIsolation(t *testing.T) {
+	base := NewVM()
+	err := base.LoadSource("inline", `
+func init() {
+  $state = { count: 0 }
+}
+func bump() {
+  $state.count = $state.count + 1
+  return $state.count
+}
+`)
+	if err != nil {
+		t.Fatalf("load source: %v", err)
+	}
+	_, err = base.CallAsync(context.Background(), "init", nil).Await(context.Background())
+	if err != nil {
+		t.Fatalf("init call: %v", err)
+	}
+	dup, err := base.Duplicate()
+	if err != nil {
+		t.Fatalf("duplicate: %v", err)
+	}
+	dupFirst, err := dup.CallAsync(context.Background(), "bump", nil).Await(context.Background())
+	if err != nil {
+		t.Fatalf("dup bump: %v", err)
+	}
+	if v, ok := dupFirst.MustRaw().(float64); !ok || v != 1 {
+		t.Fatalf("expected dup to return 1, got %#v", dupFirst)
+	}
+	baseFirst, err := base.CallAsync(context.Background(), "bump", nil).Await(context.Background())
+	if err != nil {
+		t.Fatalf("base bump: %v", err)
+	}
+	if v, ok := baseFirst.MustRaw().(float64); !ok || v != 1 {
+		t.Fatalf("expected base to return 1, got %#v", baseFirst)
+	}
+	dupSecond, err := dup.CallAsync(context.Background(), "bump", nil).Await(context.Background())
+	if err != nil {
+		t.Fatalf("dup bump second: %v", err)
+	}
+	if v, ok := dupSecond.MustRaw().(float64); !ok || v != 2 {
+		t.Fatalf("expected dup to return 2, got %#v", dupSecond)
+	}
+}
+
 func TestAPILanguageCoverage(t *testing.T) {
 	run := func(t *testing.T, src, entry string, args []any) (any, error) {
 		t.Helper()
