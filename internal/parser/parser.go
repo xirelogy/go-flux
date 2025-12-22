@@ -431,6 +431,8 @@ func (p *Parser) parseCallExpression(callee ast.Expression) ast.Expression {
 	end := expr.PosT
 	if len(expr.Arguments) > 0 {
 		end = expr.Arguments[len(expr.Arguments)-1].Span().End
+	} else if p.curToken.Type == token.RParen {
+		end = p.curToken.Pos
 	} else {
 		end = p.prevToken.Pos
 	}
@@ -573,7 +575,6 @@ func (p *Parser) parseObjectKey() ast.ObjectKey {
 func (p *Parser) parseExpressionList(end token.Type) []ast.Expression {
 	list := []ast.Expression{}
 	if p.curToken.Type == end {
-		p.nextToken()
 		return list
 	}
 	for {
@@ -586,7 +587,6 @@ func (p *Parser) parseExpressionList(end token.Type) []ast.Expression {
 		}
 		if p.peekToken.Type == end {
 			p.nextToken() // move to end
-			p.nextToken() // move past end
 		}
 		break
 	}

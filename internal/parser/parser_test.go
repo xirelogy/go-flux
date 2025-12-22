@@ -5,6 +5,7 @@ import (
 
 	"github.com/xirelogy/go-flux/internal/ast"
 	"github.com/xirelogy/go-flux/internal/lexer"
+	"github.com/xirelogy/go-flux/internal/token"
 )
 
 func TestParseReturnAndExpr(t *testing.T) {
@@ -93,5 +94,45 @@ func TestParseFunctionLiteral(t *testing.T) {
 	}
 	if fn.Body == nil || len(fn.Body.Statements) != 1 {
 		t.Fatalf("unexpected body")
+	}
+}
+
+func TestParseIfCallCondition(t *testing.T) {
+	input := `if (_callFunction(1, 2) > 2) { return 1 }`
+	p := New(lexer.New(input))
+	prog := p.ParseProgram()
+	if len(p.Errors()) != 0 {
+		t.Fatalf("parser errors: %v", p.Errors())
+	}
+	if len(prog.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(prog.Statements))
+	}
+	stmt, ok := prog.Statements[0].(*ast.IfStmt)
+	if !ok {
+		t.Fatalf("expected IfStmt, got %T", prog.Statements[0])
+	}
+	if stmt.Condition == nil {
+		t.Fatalf("expected condition")
+	}
+	cond, ok := stmt.Condition.(*ast.BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr condition, got %T", stmt.Condition)
+	}
+	if cond.Operator != token.Greater {
+		t.Fatalf("expected '>' operator, got %v", cond.Operator)
+	}
+	call, ok := cond.Left.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected call on left, got %T", cond.Left)
+	}
+	ident, ok := call.Callee.(*ast.Identifier)
+	if !ok || ident.Name != "_callFunction" {
+		t.Fatalf("expected callee _callFunction, got %T (%v)", call.Callee, ident)
+	}
+	if len(call.Arguments) != 2 {
+		t.Fatalf("expected 2 args, got %d", len(call.Arguments))
+	}
+	if _, ok := cond.Right.(*ast.NumberLiteral); !ok {
+		t.Fatalf("expected number literal on right, got %T", cond.Right)
 	}
 }
