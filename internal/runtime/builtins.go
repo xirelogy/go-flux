@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 
+	"github.com/xirelogy/go-flux/internal/bytecode"
 	"github.com/xirelogy/go-flux/internal/vm"
 )
 
@@ -33,6 +34,7 @@ func Register(spec Spec) {
 	byName[spec.Name] = spec
 	byOpcode[spec.Opcode] = spec
 	vm.RegisterBuiltin(spec.Name, spec.Opcode, spec.Arity, spec.Handler)
+	bytecode.RegisterBuiltinInfo(spec.Name, spec.Opcode, spec.Arity)
 }
 
 // LookupByName finds a builtin by its script-visible name.

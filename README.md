@@ -53,6 +53,10 @@ Creates a new VM configurator/runner. Bind globals, load scripts, and issue call
 `func (vm *VM) Duplicate() (*VM, error)`  
 Creates a new VM with the same configuration and global state, but independent memory. Returns an error if the VM is nil or busy.
 
+### (*VM) Disassemble
+`func (vm *VM) Disassemble(w io.Writer) error`  
+Writes an assembly-style dump of compiled bytecode for globals to `w`. Returns an error if the VM is nil or busy.
+
 ### (*VM) SetGlobalFunction
 `func (vm *VM) SetGlobalFunction(name string, fn *VmFunction) error`  
 Binds a marshaled host function to a global name (same as declaring `func name(...)` in flux). Errors on nil receiver/function.

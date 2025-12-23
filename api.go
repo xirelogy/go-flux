@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"strings"
@@ -625,6 +626,29 @@ func NewVM() *VM {
 	return &VM{
 		core: vm.New(),
 	}
+}
+
+// Disassemble dumps compiled bytecode as a readable assembly-style listing.
+func (vmc *VM) Disassemble(w io.Writer) error {
+	if vmc == nil || vmc.core == nil {
+		return errors.New("nil VM")
+	}
+	if w == nil {
+		return errors.New("nil writer")
+	}
+	vmc.mu.Lock()
+	if vmc.busy {
+		vmc.mu.Unlock()
+		return errors.New("VM is busy; cannot disassemble while running")
+	}
+	vmc.busy = true
+	vmc.mu.Unlock()
+	defer func() {
+		vmc.mu.Lock()
+		vmc.busy = false
+		vmc.mu.Unlock()
+	}()
+	return vmc.core.Disassemble(w)
 }
 
 // Duplicate clones the VM configuration and global state into a new instance.
