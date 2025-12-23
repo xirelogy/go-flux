@@ -86,6 +86,60 @@ func sum() {
 	}
 }
 
+func TestVMLogicalAndIfCondition(t *testing.T) {
+	src := `
+func check($a, $b) {
+  if ($a == 1 && $b == 2) { return true }
+  return false
+}`
+	v := runFunction(t, src, "check", []vm.Value{vm.Number(0), vm.Number(0)})
+	if v.Kind != vm.KindBool || v.B {
+		t.Fatalf("expected false, got %#v", v)
+	}
+	v = runFunction(t, src, "check", []vm.Value{vm.Number(1), vm.Number(2)})
+	if v.Kind != vm.KindBool || !v.B {
+		t.Fatalf("expected true, got %#v", v)
+	}
+}
+
+func TestVMLogicalAndValue(t *testing.T) {
+	src := `
+func expr($a, $b) { return $a == 1 && $b == 2 }`
+	v := runFunction(t, src, "expr", []vm.Value{vm.Number(0), vm.Number(0)})
+	if v.Kind != vm.KindBool || v.B {
+		t.Fatalf("expected false, got %#v", v)
+	}
+}
+
+func TestVMLogicalOrIfCondition(t *testing.T) {
+	src := `
+func check($a, $b) {
+  if ($a == 1 || $b == 2) { return true }
+  return false
+}`
+	v := runFunction(t, src, "check", []vm.Value{vm.Number(0), vm.Number(0)})
+	if v.Kind != vm.KindBool || v.B {
+		t.Fatalf("expected false, got %#v", v)
+	}
+	v = runFunction(t, src, "check", []vm.Value{vm.Number(1), vm.Number(0)})
+	if v.Kind != vm.KindBool || !v.B {
+		t.Fatalf("expected true, got %#v", v)
+	}
+	v = runFunction(t, src, "check", []vm.Value{vm.Number(0), vm.Number(2)})
+	if v.Kind != vm.KindBool || !v.B {
+		t.Fatalf("expected true, got %#v", v)
+	}
+}
+
+func TestVMLogicalOrValue(t *testing.T) {
+	src := `
+func expr($a, $b) { return $a == 1 || $b == 2 }`
+	v := runFunction(t, src, "expr", []vm.Value{vm.Number(0), vm.Number(0)})
+	if v.Kind != vm.KindBool || v.B {
+		t.Fatalf("expected false, got %#v", v)
+	}
+}
+
 func TestVMObjectKeyValueLoop(t *testing.T) {
 	src := `
 func copyObj() {

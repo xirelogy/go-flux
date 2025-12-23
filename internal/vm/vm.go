@@ -351,13 +351,13 @@ func (vm *VM) Run(fn *Function, args []Value) (Value, error) {
 			fr.ip = off
 		case bytecode.OP_JUMP_IF_FALSE:
 			off := vm.readU16(fr)
-			cond := vm.pop()
+			cond := vm.peek()
 			if !Truthy(cond) {
 				fr.ip = off
 			}
 		case bytecode.OP_JUMP_IF_TRUE:
 			off := vm.readU16(fr)
-			cond := vm.pop()
+			cond := vm.peek()
 			if Truthy(cond) {
 				fr.ip = off
 			}
