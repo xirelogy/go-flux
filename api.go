@@ -1096,6 +1096,10 @@ func assignValue(src vm.Value, dst reflect.Value) error {
 		if err != nil {
 			return err
 		}
+		if raw == nil {
+			dst.Set(reflect.Zero(dst.Type()))
+			return nil
+		}
 		dst.Set(reflect.ValueOf(raw))
 		return nil
 	case reflect.Bool:

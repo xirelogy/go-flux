@@ -627,6 +627,29 @@ func boom($ns) { return $ns.fail() }`
 	}
 }
 
+func TestAPIHostFunctionNullInterfaceArg(t *testing.T) {
+	vm := NewVM()
+	script := `func run($ns) { return $ns.get("key", null) }`
+	if err := vm.LoadSource("inline", script); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	ns := MustMarshalFunctionMap(map[string]any{
+		"get": func(key string, fallback any) any {
+			if key != "key" {
+				return "bad"
+			}
+			return fallback
+		},
+	})
+	res, err := vm.CallAsync(context.Background(), "run", []VmValue{ns}).Await(context.Background())
+	if err != nil {
+		t.Fatalf("call error: %v", err)
+	}
+	if !res.IsNull() {
+		t.Fatalf("expected null result, got %#v", res)
+	}
+}
+
 func TestAPIScriptErrorPromotion(t *testing.T) {
 	script := `func boom() { return error("boom") }`
 
