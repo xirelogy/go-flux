@@ -136,3 +136,30 @@ func TestParseIfCallCondition(t *testing.T) {
 		t.Fatalf("expected number literal on right, got %T", cond.Right)
 	}
 }
+
+func TestParseInvalidOperator(t *testing.T) {
+	input := `func bad($c) { $c->clear() }`
+	p := New(lexer.New(input))
+	_ = p.ParseProgram()
+	if len(p.Errors()) == 0 {
+		t.Fatalf("expected parser errors")
+	}
+}
+
+func TestParseCallMissingRParen(t *testing.T) {
+	input := `func bad($c) { inc(1, 2 }`
+	p := New(lexer.New(input))
+	_ = p.ParseProgram()
+	if len(p.Errors()) == 0 {
+		t.Fatalf("expected parser errors")
+	}
+}
+
+func TestParseCallTrailingComma(t *testing.T) {
+	input := `func bad($c) { inc(1,) }`
+	p := New(lexer.New(input))
+	_ = p.ParseProgram()
+	if len(p.Errors()) == 0 {
+		t.Fatalf("expected parser errors")
+	}
+}

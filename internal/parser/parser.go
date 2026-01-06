@@ -358,6 +358,10 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		return nil
 	}
 
+	if left == nil {
+		return nil
+	}
+
 	for !p.isEndOfExpression(p.peekToken.Type) && precedence < p.peekPrecedence() {
 		op := p.peekToken.Type
 		p.nextToken()
@@ -378,6 +382,9 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		default:
 			return left
 		}
+		if left == nil {
+			return nil
+		}
 	}
 
 	return left
@@ -390,6 +397,9 @@ func (p *Parser) parsePrefixExpression() ast.Expression {
 	}
 	p.nextToken()
 	expr.Right = p.parseExpression(prefixPrecedence)
+	if expr.Right == nil {
+		return nil
+	}
 	expr.Sp = token.Span{Start: expr.PosT, End: expr.Right.Span().End}
 	return expr
 }
@@ -403,6 +413,9 @@ func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 	precedence := p.curPrecedence()
 	p.nextToken()
 	expr.Right = p.parseExpression(precedence)
+	if expr.Right == nil {
+		return nil
+	}
 	expr.Sp = token.Span{Start: left.Span().Start, End: expr.Right.Span().End}
 	return expr
 }
@@ -579,14 +592,24 @@ func (p *Parser) parseExpressionList(end token.Type) []ast.Expression {
 	}
 	for {
 		exp := p.parseExpression(lowest)
+		if exp == nil {
+			return list
+		}
 		list = append(list, exp)
 		if p.peekToken.Type == token.Comma {
 			p.nextToken() // move to comma
 			p.nextToken() // move to next expression start
+			if p.curToken.Type == end {
+				p.errorf(p.curToken.Pos, "expected expression")
+				return list
+			}
 			continue
 		}
 		if p.peekToken.Type == end {
 			p.nextToken() // move to end
+		}
+		if p.curToken.Type != end {
+			p.errorf(p.peekToken.Pos, "expected ',' or %s", end)
 		}
 		break
 	}
