@@ -163,3 +163,20 @@ func TestParseCallTrailingComma(t *testing.T) {
 		t.Fatalf("expected parser errors")
 	}
 }
+
+func TestParseObjectLiteralWithTrailingNewline(t *testing.T) {
+	input := `func bug($c) {
+  return {
+    records: [
+      {
+        test: true
+      }
+    ]
+  }
+}`
+	p := New(lexer.New(input))
+	_ = p.ParseProgram()
+	if len(p.Errors()) != 0 {
+		t.Fatalf("parser errors: %v", p.Errors())
+	}
+}

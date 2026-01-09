@@ -540,15 +540,24 @@ func (p *Parser) parseObjectLiteral() ast.Expression {
 		obj.Sp = token.Span{Start: obj.PosT, End: p.prevToken.Pos}
 		return obj
 	}
+	p.skipNewlines()
 	for {
+		p.skipNewlines()
+		if p.curToken.Type == token.RBrace {
+			break
+		}
 		field := ast.ObjectField{}
 		field.Key = p.parseObjectKey()
+		p.skipPeekNewlines()
 		if !p.expectPeek(token.Colon) {
 			return obj
 		}
 		p.nextToken() // move to ':'
 		p.nextToken() // move to value start
+		p.skipNewlines()
 		field.Value = p.parseExpression(lowest)
+		p.skipNewlines()
+		p.skipPeekNewlines()
 		obj.Fields = append(obj.Fields, field)
 		if p.peekToken.Type == token.RBrace {
 			p.nextToken() // move to '}'
@@ -700,6 +709,12 @@ func (p *Parser) curPrecedence() int {
 
 func (p *Parser) skipNewlines() {
 	for p.curToken.Type == token.Newline {
+		p.nextToken()
+	}
+}
+
+func (p *Parser) skipPeekNewlines() {
+	for p.peekToken.Type == token.Newline {
 		p.nextToken()
 	}
 }
